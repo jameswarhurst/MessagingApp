@@ -1,6 +1,7 @@
 import sqlite3
 from tkinter import *
 from tkinter import ttk
+from tkinter import messagebox
 
 # Create a connection to the database
 conn = sqlite3.connect('secure_messaging_service.db')
@@ -8,7 +9,7 @@ conn = sqlite3.connect('secure_messaging_service.db')
 # Create a cursor object to execute SQL queries
 c = conn.cursor()
 
-# Check if the tables exist, create them if not
+# Checking to see if the tables exist, create them if not
 c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
 if not c.fetchone():
     c.execute('''CREATE TABLE users
@@ -24,14 +25,37 @@ if not c.fetchone():
                  message TEXT,
                  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-# Commit the changes and close the connection
+c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='friends'")
+if not c.fetchone():
+    c.execute('''CREATE TABLE friends
+                 (user TEXT,
+                 friend TEXT,
+                 PRIMARY KEY(user, friend),
+                 FOREIGN KEY(user) REFERENCES users(username),
+                 FOREIGN KEY(friend) REFERENCES users(username))''')
+
+# Commit the changes
 conn.commit()
+
+# Close the connection
 conn.close()
 
+current_user = None
+current_window = None
+current_user = None
+
+def destroy_current_window():
+    global current_window
+    if current_window is not None:
+        current_window.destroy()
+
 def welcomePage():
+    global current_window
+    destroy_current_window()
     window = Tk()
-    wlclbl=Label(window, text="Welcome to your hompage", fg='black', font=("Helvetica", 20))
-    wlclbl.place(x=70, y=20)
+    current_window = window
+    wlclbl=Label(window, text="Welcome To Our Secure Messaging App", fg='white', font=("Helvetica", 20))
+    wlclbl.place(x=20, y=20)
 
     btn=Button(window, text="Login", fg='black', command=login)
     btn.place(x=165, y=85)
@@ -44,35 +68,41 @@ def welcomePage():
     window.mainloop()
 
 def login():
+    global current_window
+    destroy_current_window()
+    window = Tk()
+    current_window = window
+
     def login_button_click():
         user = usrfld.get()
         passw = pasfld.get()
         window.destroy()
 
-        # Connect to the database and execute a query to check if the entered credentials are valid
+        # Connect to the database and run a query to check if the entered credentials are valid
         conn = sqlite3.connect('secure_messaging_service.db')
         c = conn.cursor()
         query = f"SELECT * FROM users WHERE username='{user}' AND password='{passw}'"
         c.execute(query)
         result = c.fetchone()
 
-        # If the query returned a result, the login is successful
+        # If result is returned then the login is OK
         if result:
+            global current_user
+            current_user = result[0]
             homepage(result[0])
         else:
             print("Wrong login")
 
         # Close the connection
         conn.close()
-    window=Tk()
 
     btn=Button(window, text="Login", fg='black', command=login_button_click)
     btn.place(x=315, y=120)
 
-    lbl=Label(window, text="Enter Your Username", fg='black', font=("Helvetica", 16))
+    lbl=Label(window, text="Enter Your Username", fg='white', font=("Helvetica", 16))
     lbl.place(x=100, y=40)
 
-    lbl1=Label(window, text="Enter Your Password", fg='black', font=("Helvetica", 16))
+    lbl1=Label(window, text="Enter Your Password", fg='white', font=("Helvetica", 16))
     lbl1.place(x=100, y=100)
 
     usrfld=Entry(window, bd=5)
@@ -107,17 +137,18 @@ def signup():
         conn.commit()
         conn.close()
 
-        login()
         
+        login()
+    
     window = Tk()
 
     btn=Button(window, text="Sign Up", fg='black', command=signup_button_click)
     btn.place(x=300, y=125)
 
-    lbl=Label(window, text="Enter A Username", fg='black', font=("Helvetica", 16))
+    lbl=Label(window, text="Enter A Username", fg='white', font=("Helvetica", 16))
     lbl.place(x=100, y=40)
 
-    lbl1=Label(window, text="Enter A Password", fg='black', font=("Helvetica", 16))
+    lbl1=Label(window, text="Enter A Password", fg='white', font=("Helvetica", 16))
     lbl1.place(x=100, y=100)
 
     usrfld=Entry(window, bd=5)
@@ -133,13 +164,13 @@ def signup():
 def homepage(username):
     window = Tk()
     window.title('Messaging App')
-    window.geometry("400x300")
+    window.geometry("700x400")
 
-    # Create a label to welcome the user
+    # Welcoming the user via labels
     welcome_label = Label(window, text=f"Welcome back, {username}!", font=("Helvetica", 20))
     welcome_label.pack(pady=20)
 
-    # Create buttons to navigate to friends list and messages
+    # Creating buttons for navigation
     friends_button = Button(window, text="Friends List", font=("Helvetica", 14), command=go_to_friends_list)
     friends_button.pack(pady=10)
 
@@ -148,12 +179,204 @@ def homepage(username):
 
     window.mainloop()
 
+
 def go_to_friends_list():
-    # Code to navigate to the friends list page
-    pass
+    def add_user():
+            user = usrfld.get()
+
+            # Connect to the database
+            conn = sqlite3.connect('secure_messaging_service.db')
+            c = conn.cursor()
+
+            # Check if the user exists
+            c.execute("SELECT * FROM users WHERE username=?", (user,))
+            result = c.fetchone()
+            if result is not None:
+                # Get the current users username
+
+                # Check if the current user is already friends with the target user
+                c.execute("SELECT * FROM friends WHERE user=? AND friend=?", (current_user, user))
+                result = c.fetchone()
+                if result is not None:
+                    lbl=Label(window, text="Already friends with " + user, fg='white', font=("Helvetica", 16))
+                    lbl.place(x=100, y=200)
+                else:
+                    # Add the friendship to the database
+                    c.execute("INSERT INTO friends VALUES (?, ?)", (current_user, user))
+                    conn.commit()
+
+                    lbl=Label(window, text="Added " + user + " to friends list", fg='white', font=("Helvetica", 16))
+                    lbl.place(x=100, y=200)
+            else:
+                lbl=Label(window, text="User not found", fg='white', font=("Helvetica", 16))
+                lbl.place(x=100, y=200)
+
+            conn.close()
+
+    def search_user():
+        user = usrfld.get()
+
+        # Connect to the database
+        conn = sqlite3.connect('secure_messaging_service.db')
+        c = conn.cursor()
+
+        # Check if the user exists to add user 
+        c.execute("SELECT * FROM users WHERE username=?", (user,))
+        if c.fetchone() is not None:
+            lbl=Label(window, text= user, fg='white', font=("Helvetica", 16))
+            lbl.place(x=100, y=160)
+            btn0 = Button(window, text="Add User", command=add_user)
+            btn0.place(x=300, y=160)
+
+            conn.close()
+            return
+        elif c.fetchone() is None:
+            lbl=Label(window, text="user not found", fg='white', font=("Helvetica", 16))
+            lbl.place(x=100, y=160)
+            return
+    
+    window = Tk()
+
+
+    lbl=Label(window, text="Welcome to your friends list", fg='white', font=("Helvetica", 16))
+    lbl.place(x=100, y=40)
+
+    lbl1=Label(window, text="Here you will be able to see all your contacts, use the search button to search for new friends", fg='white', font=("Helvetica", 16))
+    lbl1.place(x=100, y=65)
+
+    btn=Button(window, text="Search contact", fg='black',command=search_user)
+    btn.place(x=300, y=125)
+
+    usrfld=Entry(window, bd=5)
+    usrfld.place(x=100, y=125)
+
+    window.title('Friends Page')
+    window.geometry("800x500")
+    friends_l()
+    window.mainloop()
+    
+def friends_l():
+        # Connect to the database and execute a query to retrieve the current user's friends
+        conn = sqlite3.connect('secure_messaging_service.db')
+        c = conn.cursor()
+        query = f"SELECT friend FROM friends WHERE user='{current_user}'"
+        c.execute(query)
+        results = c.fetchall()
+
+        # Create a list of friends from the query results
+        friends = [result[0] for result in results]
+
+        # Close the connection
+        conn.close()
+
+        # Create a label to display the current user's username
+        current_user_label = Label(text=f"Current User: {current_user}")
+        current_user_label.place(x=50, y=30)
+
+        # Create a label to display the list of friends
+        friends_label1 = Label(text="Friends:")
+        friends_label1.place(x=50, y=60)
+
+        # Loop through the friends list and display each friend
+        y_pos = 85
+        for friend in friends:
+            friend_label1 = Label(text=friend)
+            friend_label1.place(x=50, y=y_pos)
+            y_pos += 25
+
 
 def go_to_messages():
-    # Code to navigate to the messages page
-    pass
+    window = Tk()
+    window.title('Messaging App')
+    window.geometry("700x400")
 
+    # Create a label to welcome the user
+    welcome_label = Label(window, text=f"Welcome back, {current_user}!")
+    welcome_label.pack(pady=10)
+
+    # Get the user's friends from the database
+    conn = sqlite3.connect('secure_messaging_service.db')
+    c = conn.cursor()
+    c.execute("SELECT friend FROM friends WHERE user=?", (current_user,))
+    friends = [row[0] for row in c.fetchall()]
+    conn.close()
+
+    # lables to display users friends
+    friends_label = Label(window, text="Your friends:")
+    friends_label.pack()
+    friends_listbox = Listbox(window, height=10, selectmode=SINGLE)
+    for friend in friends:
+        friends_listbox.insert(END, friend)
+    friends_listbox.pack(pady=10)
+
+    # Label for the msg box
+    message_label = Label(window, text="Message:")
+    message_label.pack()
+    message_textbox = Text(window, height=5)
+    message_textbox.pack(pady=10)
+    
+
+    def send_message():
+        if friends_listbox.curselection():
+            friend = friends_listbox.get(friends_listbox.curselection())
+            message = message_textbox.get("1.0", END).strip()
+            if friend and message:
+                conn = sqlite3.connect('secure_messaging_service.db')
+                c = conn.cursor()
+                c.execute("INSERT INTO messages (sender, receiver, message) VALUES (?, ?, ?)", (current_user, friend, message))
+                conn.commit()
+                conn.close()
+                messagebox.showinfo("Success", "Message sent!")
+            else:
+                messagebox.showwarning("Error", "Please select a friend and enter a message.")
+        else:
+            messagebox.showwarning("Error", "Please select a friend.")
+
+
+    # Button to send msg
+    send_button = Button(window, text="Send", command=send_message)
+    send_button.pack()
+
+    
+    display_messages_with_user()
+    def display_messages_with_user(current_user, user):
+        # DB query dor all the messsage between the current user and user ie friend
+        conn = sqlite3.connect('secure_messaging_service.db')
+        c = conn.cursor()
+        query = f"SELECT * FROM messages WHERE (sender='{current_user}' AND receiver='{user}') OR (sender='{user}' AND receiver='{current_user}') ORDER BY timestamp"
+        c.execute(query)
+        messages = c.fetchall()
+
+        # New window to show our msg's
+        window = Tk()
+        window.title(f"{current_user} and {user}")
+        window.geometry("500x400")
+
+        # Add each message to the window as a label
+        for i, message in enumerate(messages):
+            # Make sure the message is a tuple and has the expected format
+            if isinstance(message, tuple) and len(message) == 5 and isinstance(message[2], str):
+                sender = message[1]
+                receiver = message[2]
+                text = message[3]
+                timestamp = message[4]
+                message_label = Label(window, text=f"{sender} to {receiver} ({timestamp}):\n{text}\n\n")
+                message_label.grid(row=i, column=0, sticky="w")
+            else:
+                print(f"Unexpected message format: {message}")
+
+        # Closing db connection
+        conn.close()
+
+
+
+conn = sqlite3.connect('secure_messaging_service.db')
+c = conn.cursor()
+c.execute("SELECT * FROM messages")
+messages = c.fetchall()
+for message in messages:
+    print(message)
+conn.close()
+
+   
 welcomePage()
